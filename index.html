@@ -3,55 +3,217 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700;900&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="A fast, beautiful weather app: live conditions, hourly and 7-day forecasts, air quality and more for any city.">
+    <meta name="theme-color" content="#1e5fbf">
     <title>Vivek's Weather</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='24' cy='24' r='12' fill='%23ffc93c'/%3E%3Cpath d='M46.5 50H19a11 11 0 0 1-1.6-21.9 15 15 0 0 1 28.6 3.1A9.5 9.5 0 0 1 46.5 50z' fill='%23fff'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <div class="container">
-        <div class="search-box">
-            <i class="fa-solid fa-location-dot"></i>
-            <input type="text" placeholder="Enter your location">
-            <button class="fa-solid fa-magnifying-glass"></button>
-        </div>
+    <!-- Living sky: gradient layers, sun or moon, and a canvas for stars, clouds, rain and snow -->
+    <div class="sky" aria-hidden="true">
+        <div class="sky__layer is-on" id="skyA"></div>
+        <div class="sky__layer" id="skyB"></div>
+        <div class="sky__orb" id="orb"></div>
+        <canvas class="sky__fx" id="fx"></canvas>
+        <div class="sky__flash" id="flash"></div>
+        <div class="sky__shade"></div>
+    </div>
 
-        <div class="not-found">
-            <img src="images/404.png">
-            <p>Oops! Invalid location :/</p>
-        </div>
+    <!-- Shared gradients for the weather icons -->
+    <svg class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+        <defs>
+            <linearGradient id="g-sun" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffe680" />
+                <stop offset="1" stop-color="#ffab1a" />
+            </linearGradient>
+            <linearGradient id="g-moon" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#fdfbf0" />
+                <stop offset="1" stop-color="#c3c9ea" />
+            </linearGradient>
+            <linearGradient id="g-cloud" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffffff" />
+                <stop offset="1" stop-color="#d9e4f5" />
+            </linearGradient>
+            <linearGradient id="g-cloud-dark" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#b4c0d4" />
+                <stop offset="1" stop-color="#7d8ba3" />
+            </linearGradient>
+            <linearGradient id="g-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffffff" stop-opacity="0.2" />
+                <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+            </linearGradient>
+            <linearGradient id="g-bolt" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#fff3a6" />
+                <stop offset="1" stop-color="#ffc21a" />
+            </linearGradient>
+        </defs>
+    </svg>
 
-        <div class="weather-box">
-            <img src="">
-            <p class="temperature"></p>
-            <p class="description"></p>
-        </div>
+    <div class="app">
 
-        <div class="weather-details">
-            <div class="humidity">
-                <i class="fa-solid fa-water"></i>
-                <div class="text">
-                    <span></span>
-                    <p>Humidity</p>
-                </div>
+        <header class="top">
+            <a class="brand" href="./" aria-label="Vivek's Weather, home">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <circle cx="24" cy="24" r="12" fill="url(#g-sun)" />
+                    <path d="M46.5 50H19a11 11 0 0 1-1.6-21.9 15 15 0 0 1 28.6 3.1A9.5 9.5 0 0 1 46.5 50z" fill="url(#g-cloud)" />
+                </svg>
+                <span>Vivek's Weather</span>
+            </a>
+
+            <form class="search" id="search" role="search" autocomplete="off">
+                <svg class="search__pin" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+                    <circle cx="12" cy="9.5" r="2.5" />
+                </svg>
+                <input id="q" type="text" inputmode="search" enterkeyhint="search" placeholder="Search for a city"
+                    aria-label="Search for a city" role="combobox" aria-expanded="false" aria-controls="suggest"
+                    aria-autocomplete="list" spellcheck="false" autocapitalize="words">
+                <button type="button" class="icon-btn" id="locate" aria-label="Use my location" title="Use my location">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="6.5" />
+                        <circle cx="12" cy="12" r="2" class="fill" />
+                        <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+                    </svg>
+                </button>
+                <button type="submit" class="icon-btn icon-btn--go" id="go" aria-label="Search">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" class="go__glass">
+                        <circle cx="11" cy="11" r="6.5" />
+                        <path d="M16 16l4.5 4.5" />
+                    </svg>
+                    <span class="spinner" aria-hidden="true"></span>
+                </button>
+                <ul class="suggest" id="suggest" role="listbox" aria-label="Matching places" hidden></ul>
+            </form>
+
+            <div class="units" role="group" aria-label="Temperature units">
+                <button type="button" data-unit="c" aria-pressed="true">°C</button>
+                <button type="button" data-unit="f" aria-pressed="false">°F</button>
             </div>
-            <div class="wind">
-                <i class="fa-solid fa-wind"></i>
-                <div class="text">
-                    <span></span>
-                    <p>Wind Speed</p>
-                </div>
-            </div>
+        </header>
+
+        <nav class="saved" id="saved" aria-label="Saved places" hidden></nav>
+
+        <div class="banner" id="banner" role="status" aria-live="polite" hidden>
+            <span id="banner-text"></span>
+            <button type="button" id="banner-action" hidden></button>
         </div>
+
+        <main id="main">
+
+            <!-- First visit -->
+            <section class="state welcome" id="view-welcome" hidden>
+                <h1>Weather for anywhere.</h1>
+                <p>Search for a city above, or start with one of these.</p>
+                <div class="welcome__actions">
+                    <button type="button" class="pill pill--strong" id="welcome-locate">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="6.5" />
+                            <circle cx="12" cy="12" r="2" class="fill" />
+                            <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+                        </svg>
+                        Use my location
+                    </button>
+                    <div class="welcome__picks" id="picks"></div>
+                </div>
+            </section>
+
+            <!-- Loading placeholder -->
+            <section class="state skeleton" id="view-loading" aria-label="Loading weather" hidden>
+                <div class="sk sk--title"></div>
+                <div class="sk sk--line"></div>
+                <div class="sk sk--temp"></div>
+                <div class="sk sk--line sk--short"></div>
+                <div class="sk sk--panel"></div>
+                <div class="sk sk--panel sk--tall"></div>
+            </section>
+
+            <!-- Unknown place -->
+            <section class="state notfound" id="view-notfound" hidden>
+                <img src="images/404.png" alt="" width="367" height="278">
+                <h2>We couldn't find <span id="nf-query"></span></h2>
+                <p>Check the spelling, or try a nearby larger city.</p>
+            </section>
+
+            <!-- Network failure with nothing cached -->
+            <section class="state error" id="view-error" hidden>
+                <h2>Couldn't reach the weather service</h2>
+                <p>Check your connection and try again.</p>
+                <button type="button" class="pill pill--strong" id="retry">Try again</button>
+            </section>
+
+            <!-- The weather -->
+            <div class="dash" id="view-dash" hidden>
+
+                <section class="hero" aria-labelledby="place">
+                    <div class="hero__head">
+                        <div class="hero__where">
+                            <h1 id="place"></h1>
+                            <p class="hero__sub"><span id="region"></span><span id="clock"></span></p>
+                        </div>
+                        <button type="button" class="icon-btn star" id="star" aria-pressed="false" aria-label="Save this place">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="hero__main">
+                        <p class="hero__temp" aria-live="polite"><span id="temp"></span><span class="deg">°</span></p>
+                        <div class="hero__icon" id="hero-icon"></div>
+                    </div>
+                    <p class="hero__cond" id="cond"></p>
+                    <p class="hero__meta" id="meta"></p>
+                    <p class="hero__insight" id="insight"></p>
+                </section>
+
+                <section class="panel daily" aria-labelledby="daily-h">
+                    <h2 class="panel__title" id="daily-h">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="3.5" y="5" width="17" height="15.5" rx="3" />
+                            <path d="M3.5 10h17M8 3v4M16 3v4" />
+                        </svg>
+                        7-day forecast
+                    </h2>
+                    <ol class="daily__list" id="daily"></ol>
+                </section>
+
+                <section class="panel hourly" aria-labelledby="hourly-h">
+                    <h2 class="panel__title" id="hourly-h">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="8.5" />
+                            <path d="M12 7v5l3.5 2" />
+                        </svg>
+                        Next 24 hours
+                    </h2>
+                    <button type="button" class="hourly__nav hourly__nav--prev" id="h-prev" aria-label="Earlier hours" hidden>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" /></svg>
+                    </button>
+                    <button type="button" class="hourly__nav hourly__nav--next" id="h-next" aria-label="Later hours">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6" /></svg>
+                    </button>
+                    <div class="hourly__scroll" id="hourly-scroll" tabindex="0" role="group" aria-label="Hourly forecast, scrollable">
+                        <div class="hourly__track" id="hourly"></div>
+                    </div>
+                </section>
+
+                <section class="tiles" id="tiles" aria-label="Current conditions in detail"></section>
+
+            </div>
+        </main>
+
+        <footer class="foot">
+            <span id="updated"></span>
+            <span>Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></span>
+        </footer>
 
     </div>
 
-    <script src="https://kit.fontawesome.com/7c8801c017.js" crossorigin="anonymous"></script>
     <script src="index.js"></script>
 </body>
 
