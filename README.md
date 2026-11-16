@@ -8,7 +8,10 @@ Type a city and see its weather straight away.
 
 - **Search with suggestions** – matches appear as you type. `Paris, France` and `Paris, TX` both work, and Enter searches.
 - **Use my location** – one tap for the weather where you are.
-- **Living sky** – the background follows the conditions and the local time of the place you search: dawn, day, dusk and night, with drifting clouds, rain, snow, fog, stars and lightning.
+- **Immersive layout** – the screen is a window onto the weather: only the place, temperature and conditions sit on the scene, in the lower left. Everything else is one swipe away.
+- **Details sheet** – tap, or swipe up on, "Forecast & details" for the hourly strip, the 7-day forecast and the detail tiles. Close it with the close button, the backdrop, Escape or by dragging it down.
+- **3D weather worlds** – sunny weather is a flight through clouds and rain is a neon-lit street in the rain. Drag to look around. They use WebGL through a vendored copy of [three.js](https://threejs.org/) (MIT). Other conditions, and browsers without WebGL, use the 2D animated sky.
+- **Living sky** – the background follows the conditions and the local time of the place you search: dawn, day, dusk and night, with drifting clouds, snow, fog, stars and lightning.
 - **Now** – temperature, conditions, feels-like, today's high and low, and a one-line summary of what happens next.
 - **Next 24 hours** – hourly icons, chance of rain and a temperature curve.
 - **7-day forecast** – daily highs and lows as range bars.
@@ -20,7 +23,7 @@ Type a city and see its weather straight away.
 
 ## Run it
 
-Open `index.html` in a browser, or serve the folder with any static server:
+The app must be served over http, because ES modules (used by the 3D worlds) do not load from `file://`. Serve the folder with any static server:
 
 ```sh
 python3 -m http.server 8000
@@ -40,6 +43,7 @@ The app stores your units, saved places and the last forecast in your browser's 
 | File | What it does |
 | --- | --- |
 | `index.html` | Page structure |
+| `worlds/` | The 3D weather worlds (three.js, vendored in `vendor/`) |
 | `style.css` | Layout, glass surfaces, icon animations, responsive rules |
 | `index.js` | Data fetching, rendering, search, and the animated sky |
 | `images/404.png` | Illustration for "place not found" |

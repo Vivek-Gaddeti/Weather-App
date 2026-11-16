@@ -31,7 +31,7 @@
         },
     };
 
-    const KEYS = { units: 'vw:units', last: 'vw:last', saved: 'vw:saved', cache: 'vw:cache' };
+    const KEYS = { units: 'vw:units', last: 'vw:last', saved: 'vw:saved', cache: 'vw:cache', hinted: 'vw:hinted' };
     const REFRESH_MS = 10 * 60 * 1000;
     const CACHE_MS = 6 * 60 * 60 * 1000;
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -477,8 +477,12 @@
             paint(0, 0);
         }
 
+        // While a 3D world is showing it replaces these effects, so the loop stops.
+        const worldShowing = () => document.body.hasAttribute('data-world');
+
         function start() {
             cancelAnimationFrame(raf);
+            if (worldShowing()) return;
             if (reducedMotion.matches) { drawStill(); return; }
             if (document.hidden) return;
             last = performance.now();
@@ -505,12 +509,26 @@
         });
         document.addEventListener('visibilitychange', () => (document.hidden ? cancelAnimationFrame(raf) : start()));
         reducedMotion.addEventListener?.('change', start);
+        new MutationObserver(start).observe(document.body, { attributes: true, attributeFilter: ['data-world'] });
 
         setTone('light');
         resize();
         start();
         return { set };
     })();
+
+    /* Hand the 3D layer (worlds/main.js, which may load late or never) what to show. */
+    const WORLD_KIND = { clear: 'sunny', partly: 'sunny', drizzle: 'rain', rain: 'rain', sleet: 'rain', storm: 'rain' };
+
+    function setWorld(kind, params) {
+        const worlds = window.Worlds;
+        if (!worlds || worlds.supported === false) return;
+        try {
+            worlds.set(kind, params);
+        } catch (err) {
+            console.warn('3D world failed', err);
+        }
+    }
 
     /* Pick the sky, sun or moon, and effects for the current conditions. */
     function applySky() {
@@ -553,15 +571,28 @@
             drizzle: 0.8, rain: 0.92, sleet: 0.9, snow: 0.85, storm: 1,
         }[w.kind];
         const toward = ((cur.wind_direction_10m ?? 270) + 180) * Math.PI / 180;
+        const rain = { drizzle: w.level * 0.8, rain: w.level, sleet: w.level * 0.7, storm: 0.95 }[w.kind] || 0;
+        const wind = Math.sin(toward) * clamp((cur.wind_speed_10m ?? 0) / 40, 0, 1);
         FX.set({
             stars: !dayNow && open ? (w.kind === 'clear' ? 1 : 0.7) : 0,
             clouds,
-            rain: { drizzle: w.level * 0.8, rain: w.level, sleet: w.level * 0.7, storm: 0.95 }[w.kind] || 0,
+            rain,
             snow: w.kind === 'snow' ? w.level : w.kind === 'sleet' ? 0.3 : 0,
             fog: w.kind === 'fog' ? 1 : 0,
             storm: w.kind === 'storm',
-            wind: Math.sin(toward) * clamp((cur.wind_speed_10m ?? 0) / 40, 0, 1),
+            wind,
             tone: !dayNow ? 'night' : phase === 'dawn' || phase === 'dusk' ? 'dusk' : open ? 'light' : 'gray',
+        });
+
+        const kind = WORLD_KIND[w.kind] || null;
+        setWorld(kind, {
+            timeOfDay: phase,
+            sunProgress: sunValid && phase !== 'night' ? clamp((now - sr) / (ss - sr), 0, 1) : null,
+            wind,
+            windSpeed: cur.wind_speed_10m ?? 0,
+            intensity: kind === 'sunny' ? cover : kind === 'rain' ? rain : 0,
+            storm: w.kind === 'storm',
+            temperature: cur.temperature_2m,
         });
     }
 
@@ -573,7 +604,20 @@
         if (phase === 'night') Sky.setOrb('moon', 80, 6.5, 1);
         else Sky.setOrb('sun', 78, phase === 'day' ? 10 : 24, 1);
         FX.set({ stars: phase === 'night' ? 1 : 0, clouds: phase === 'night' ? 0.15 : 0.3, wind: 0.2, tone: phase === 'night' ? 'night' : phase === 'day' ? 'light' : 'dusk' });
+        const hour = new Date().getHours() + new Date().getMinutes() / 60;
+        setWorld('sunny', {
+            timeOfDay: phase,
+            sunProgress: phase === 'night' ? null : clamp((hour - 6) / 13, 0, 1),
+            wind: 0.2,
+            windSpeed: 8,
+            intensity: 0.35,
+            storm: false,
+            temperature: 18,
+        });
     }
+
+    // The 3D layer loads after this script (or never): once it is ready, show the current sky in it.
+    window.addEventListener('worlds:ready', () => (state.data ? applySky() : ambientSky()));
 
     /* ------------------------------------------------------------------ API */
 
@@ -653,6 +697,8 @@
 
     function setView(name) {
         for (const [key, el] of Object.entries(views)) el.hidden = key !== name;
+        if (name !== 'dash') Sheet.close();
+        $('#sheet-handle').hidden = name !== 'dash';
     }
 
     const banner = $('#banner');
@@ -680,6 +726,7 @@
         loadCtl?.abort();
         const ctl = loadCtl = new AbortController();
         const changed = !state.place || state.place.id !== place.id;
+        if (changed) Sheet.close();
         state.place = place;
         store.set(KEYS.last, place);
         renderSaved();
@@ -737,6 +784,7 @@
 
         $('#updated').textContent = `Updated ${new Date(state.data.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
         dash.classList.remove('is-stale');
+        sheetEl.classList.remove('enter'); // the sheet's own entrance plays each time it opens
         const wasHidden = dash.hidden;
         setView('dash');
         tickClock();
@@ -756,6 +804,7 @@
         const w = describe(cur.weather_code, cur.is_day === 1);
 
         $('#place').textContent = p.name;
+        $('#sheet-place').textContent = p.name;
         $('#region').textContent = [p.admin, p.country].filter(v => v && v !== p.name).join(', ');
         $('#cond').textContent = w.label;
         $('#meta').innerHTML =
@@ -1040,6 +1089,139 @@
         const now = Date.now() + state.data.fc.utc_offset_seconds * 1000;
         $('#clock').textContent = fmt(now, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
     }
+
+    /* ------------------------------------------------------------------ details sheet */
+
+    const sheetEl = $('#sheet');
+
+    const Sheet = (() => {
+        const handle = $('#sheet-handle');
+        const scrim = $('#scrim');
+        const head = $('#sheet-head');
+        const closeBtn = $('#sheet-close');
+        const app = $('.app');
+        const body = document.body;
+        let isOpen = false;
+
+        function open() {
+            if (isOpen || handle.hidden) return;
+            isOpen = true;
+            hideHint();
+            app.inert = true;
+            handle.inert = true;
+            sheetEl.inert = false;
+            sheetEl.classList.remove('enter');
+            void sheetEl.offsetWidth;
+            sheetEl.classList.add('is-open', 'enter');
+            scrim.classList.add('is-on');
+            body.classList.add('sheet-open');
+            handle.setAttribute('aria-expanded', 'true');
+            $('#sheet-body').scrollTop = 0;
+            updateHourlyNav();
+            closeBtn.focus({ preventScroll: true });
+        }
+
+        function close() {
+            if (!isOpen) return;
+            isOpen = false;
+            sheetEl.classList.remove('is-open', 'is-dragging');
+            sheetEl.style.removeProperty('--drag');
+            sheetEl.inert = true;
+            scrim.classList.remove('is-on');
+            body.classList.remove('sheet-open');
+            app.inert = false;
+            handle.inert = false;
+            handle.setAttribute('aria-expanded', 'false');
+            handle.focus({ preventScroll: true });
+        }
+
+        // Tap, Enter or Space opens it; a swipe up on the handle does too.
+        let startY = null;
+        let swiped = false;
+        handle.addEventListener('pointerdown', e => {
+            startY = e.clientY;
+            swiped = false;
+            handle.setPointerCapture?.(e.pointerId);
+        });
+        handle.addEventListener('pointermove', e => {
+            if (startY != null && !swiped && startY - e.clientY > 24) { swiped = true; open(); }
+        });
+        handle.addEventListener('pointerup', () => { startY = null; });
+        handle.addEventListener('pointercancel', () => { startY = null; });
+        handle.addEventListener('click', () => {
+            if (swiped) { swiped = false; return; }
+            isOpen ? close() : open();
+        });
+
+        closeBtn.addEventListener('click', close);
+        scrim.addEventListener('click', close);
+
+        // Drag the header down to close.
+        let drag = null;
+        head.addEventListener('pointerdown', e => {
+            if (e.target.closest('button') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            drag = { id: e.pointerId, y: e.clientY, dy: 0, t: performance.now() };
+            head.setPointerCapture?.(e.pointerId);
+            sheetEl.classList.add('is-dragging');
+        });
+        head.addEventListener('pointermove', e => {
+            if (!drag || e.pointerId !== drag.id) return;
+            drag.dy = Math.max(0, e.clientY - drag.y);
+            sheetEl.style.setProperty('--drag', `${drag.dy}px`);
+        });
+        const endDrag = e => {
+            if (!drag || e.pointerId !== drag.id) return;
+            const { dy, t } = drag;
+            drag = null;
+            sheetEl.classList.remove('is-dragging');
+            sheetEl.style.removeProperty('--drag');
+            if (e.type === 'pointerup' && (dy > 90 || (dy > 30 && dy / (performance.now() - t) > 0.5))) close();
+        };
+        head.addEventListener('pointerup', endDrag);
+        head.addEventListener('pointercancel', endDrag);
+
+        document.addEventListener('keydown', e => {
+            if (!isOpen) return;
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                close();
+            } else if (e.key === 'Tab') {
+                // Keep focus inside the dialog.
+                const focusable = [...sheetEl.querySelectorAll('button, a[href], [tabindex]:not([tabindex="-1"])')].filter(el => !el.hidden && el.offsetParent !== null);
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (!sheetEl.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+                else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        });
+
+        return { open, close };
+    })();
+
+    /* First-visit hint, shown once the first time a 3D world is on screen */
+    const hint = $('#hint');
+    let hintTimer = 0;
+    function hideHint() {
+        clearTimeout(hintTimer);
+        hint.classList.remove('is-on');
+    }
+    new MutationObserver(() => {
+        if (!document.body.hasAttribute('data-world')) { hideHint(); return; }
+        if (store.get(KEYS.hinted, false)) return;
+        store.set(KEYS.hinted, true);
+        hint.classList.add('is-on');
+        hintTimer = setTimeout(hideHint, 6000);
+    }).observe(document.body, { attributes: true, attributeFilter: ['data-world'] });
+
+    // Dragging to look around dismisses it.
+    let pressAt = null;
+    window.addEventListener('pointerdown', e => { pressAt = [e.clientX, e.clientY]; }, { passive: true });
+    window.addEventListener('pointerup', () => { pressAt = null; }, { passive: true });
+    window.addEventListener('pointermove', e => {
+        if (pressAt && Math.hypot(e.clientX - pressAt[0], e.clientY - pressAt[1]) > 8) hideHint();
+    }, { passive: true });
 
     /* ------------------------------------------------------------------ saved places */
 

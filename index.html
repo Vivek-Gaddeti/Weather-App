@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=3">
 </head>
 
 <body>
@@ -22,6 +22,7 @@
         <div class="sky__layer" id="skyB"></div>
         <div class="sky__orb" id="orb"></div>
         <canvas class="sky__fx" id="fx"></canvas>
+        <canvas class="sky__world" id="world"></canvas>
         <div class="sky__flash" id="flash"></div>
         <div class="sky__shade"></div>
     </div>
@@ -122,6 +123,7 @@
                     </button>
                     <div class="welcome__picks" id="picks"></div>
                 </div>
+                <p class="credit">Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>
             </section>
 
             <!-- Loading placeholder -->
@@ -130,8 +132,6 @@
                 <div class="sk sk--line"></div>
                 <div class="sk sk--temp"></div>
                 <div class="sk sk--line sk--short"></div>
-                <div class="sk sk--panel"></div>
-                <div class="sk sk--panel sk--tall"></div>
             </section>
 
             <!-- Unknown place -->
@@ -172,17 +172,36 @@
                     <p class="hero__insight" id="insight"></p>
                 </section>
 
-                <section class="panel daily" aria-labelledby="daily-h">
-                    <h2 class="panel__title" id="daily-h">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="3.5" y="5" width="17" height="15.5" rx="3" />
-                            <path d="M3.5 10h17M8 3v4M16 3v4" />
-                        </svg>
-                        7-day forecast
-                    </h2>
-                    <ol class="daily__list" id="daily"></ol>
-                </section>
+            </div>
+        </main>
 
+    </div>
+
+    <!-- Details sheet: collapsed to a small handle, pulled up over a dimmed backdrop -->
+    <button type="button" class="handle" id="sheet-handle" aria-expanded="false" aria-controls="sheet" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14.5l6-6 6 6" /></svg>
+        <span>Forecast &amp; details</span>
+    </button>
+
+    <p class="hint" id="hint" aria-hidden="true">Drag to look around · Hold to move faster</p>
+
+    <div class="scrim" id="scrim" aria-hidden="true"></div>
+
+    <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" inert>
+        <div class="sheet__head" id="sheet-head">
+            <span class="sheet__grip" aria-hidden="true"></span>
+            <div class="sheet__bar">
+                <div class="sheet__title">
+                    <h2 id="sheet-title">Forecast &amp; details</h2>
+                    <p id="sheet-place"></p>
+                </div>
+                <button type="button" class="icon-btn" id="sheet-close" aria-label="Close forecast and details">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
+                </button>
+            </div>
+        </div>
+        <div class="sheet__body" id="sheet-body">
+            <div class="sheet__grid">
                 <section class="panel hourly" aria-labelledby="hourly-h">
                     <h2 class="panel__title" id="hourly-h">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -202,19 +221,28 @@
                     </div>
                 </section>
 
+                <section class="panel daily" aria-labelledby="daily-h">
+                    <h2 class="panel__title" id="daily-h">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="3.5" y="5" width="17" height="15.5" rx="3" />
+                            <path d="M3.5 10h17M8 3v4M16 3v4" />
+                        </svg>
+                        7-day forecast
+                    </h2>
+                    <ol class="daily__list" id="daily"></ol>
+                </section>
+
                 <section class="tiles" id="tiles" aria-label="Current conditions in detail"></section>
-
             </div>
-        </main>
+            <footer class="foot">
+                <span id="updated"></span>
+                <span>Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></span>
+            </footer>
+        </div>
+    </section>
 
-        <footer class="foot">
-            <span id="updated"></span>
-            <span>Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></span>
-        </footer>
-
-    </div>
-
-    <script src="index.js?v=2"></script>
+    <script src="index.js?v=3"></script>
+    <script type="module" src="worlds/main.js?v=3"></script>
 </body>
 
 </html>
